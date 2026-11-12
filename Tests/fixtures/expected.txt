@@ -1,0 +1,3 @@
+The quick brown fox jumps over the lazy dog.
+Photo OCR reads printed text from pictures.
+Invoice number 48213 is due on 14 March 2027.
