@@ -12,7 +12,7 @@ import NaturalLanguage
 /// - A word is left alone if any English dictionary on the Mac knows it.
 /// - A replacement must be the same word with one letter the recognizer
 ///   dropped or confused, must itself be spelled correctly, and must be the
-///   only such suggestion or the spell checker's own first choice.
+///   only suggestion that fits.
 /// - Marks at line ends are only removed when they repeat down the page, the
 ///   way a border does, and never when they are plain numbers.
 enum TextCleanup {
@@ -229,10 +229,10 @@ enum TextCleanup {
                 && isCorrect(candidate, in: language) {
                 plausible.append(candidate)
             }
-            if plausible.count == 1 { return plausible[0] }
-            // Several fit: only trust the spell checker's own first choice.
-            if let firstChoice, plausible.first == firstChoice { return firstChoice }
-            return nil
+            // Several fitting words ("Unted": United or Untied) means we cannot
+            // tell which was meant; the spell checker's first choice differs
+            // between macOS versions, so it is no tie-breaker.
+            return plausible.count == 1 ? plausible[0] : nil
         }
 
         /// True if `candidate` could be `word` with a letter dropped by the
