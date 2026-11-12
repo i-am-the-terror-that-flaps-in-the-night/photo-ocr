@@ -33,6 +33,7 @@ if "$CLI" --clean-up < "$FIX/cleanup_input.txt" | diff - "$FIX/cleanup_expected.
     echo "PASS  clean-up"
 else
     echo "FAIL  clean-up"; failures=$((failures + 1))
+    "$CLI" --clean-up < "$FIX/cleanup_input.txt" | diff - "$FIX/cleanup_expected.txt" | sed 's/^/      /'
 fi
 
 # Clean-up must leave correct text alone: each line of cleanup_keep.txt is
