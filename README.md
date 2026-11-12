@@ -18,6 +18,8 @@
 - Drop a photo on the window, open one with **Open…** (⌘O), or paste one with ⌘V.
 - The recognized text appears in an editable box next to the photo.
 - **Copy** puts the text on the clipboard; **Save…** writes it to a `.txt` file.
+- **Clean Up** (optional) repairs misread words with the macOS spell checker and removes stray marks at the ends of lines. **Undo** puts the text back.
+- **Fix with AI** (optional, macOS 26 or later with Apple Intelligence turned on) corrects misread words using the language model built into macOS. It reads whole sentences, so it catches far more than Clean Up. The model runs on your Mac. The button only appears on Macs that have it.
 - Reads JPEG, PNG, HEIC (straight from an iPhone) and the other image formats macOS understands.
 - Photos stored sideways or upside down are handled: the app reads the photo's rotation tag.
 - Small text is enlarged and read a second time, which makes low-resolution photos much more accurate.
@@ -27,9 +29,9 @@ It is built for printed text: book pages, letters, receipts, signs, screenshots.
 
 ## Privacy
 
-- **No network access.** The app contains no networking code. Recognition is done by the Vision framework that ships with macOS.
+- **No network access.** The app contains no networking code. Recognition is done by the Vision framework, Clean Up by the spell checker and Fix with AI by the on-device language model, all of which ship with macOS and run on your Mac.
 - **Nothing is stored.** No history, no analytics, no accounts. Your photos are read, shown and forgotten.
-- **You can check.** The whole app is two Swift files in [`Sources/`](Sources), about 525 lines.
+- **You can check.** The whole app is four Swift files in [`Sources/`](Sources), about 900 lines.
 
 ## Install
 
@@ -87,6 +89,8 @@ Other scripts:
 | File | Role |
 | --- | --- |
 | [`Sources/OCRCore.swift`](Sources/OCRCore.swift) | Loads an image, reads its rotation tag and runs `VNRecognizeTextRequest`. No UI code. |
+| [`Sources/TextCleanup.swift`](Sources/TextCleanup.swift) | The optional Clean Up step: cautious word repair and stray-mark removal. |
+| [`Sources/AITextFixer.swift`](Sources/AITextFixer.swift) | The optional Fix with AI step, using Apple's on-device Foundation Models framework. |
 | [`Sources/PhotoOCRApp.swift`](Sources/PhotoOCRApp.swift) | The SwiftUI window: drop, open, paste, copy and save. |
 | [`Tests/ocr_cli.swift`](Tests/ocr_cli.swift) | A command-line wrapper around the OCR core, used by the tests. |
 | [`build.sh`](build.sh) | Compiles a universal app with `swiftc` and signs it ad hoc. |
@@ -99,6 +103,8 @@ Other scripts:
 - **macOS versions:** the app targets macOS 13 and later, but it has only been run on macOS 27. Older versions are untested.
 - **Intel Macs:** the app is a universal build, but it has only been run on Apple Silicon and, for the Intel half, under Rosetta. It has not been tried on a real Intel Mac.
 - **Language:** recognition uses Vision's default language setting.
+- **Fix with AI can change more than it should.** It is a language model: it usually only repairs misread words, but it can reword a phrase, drop a fragment or "correct" an unusual name. It joins the lines of a paragraph. Compare against the photo for anything that matters, and use Undo if you don't like the result.
+- **Clean Up is English only and not perfect.** It only replaces a word when the fix is close to unambiguous, so some misreads stay, and now and then it picks the wrong real word. Check names and numbers yourself.
 
 ## License
 

@@ -104,7 +104,7 @@ codesign --verify --deep --strict "$APP"
 echo "Compiling ocr_cli..."
 cp "$DIR/Tests/ocr_cli.swift" "$TMP/cli/main.swift"
 swiftc "${SWIFT_FLAGS[@]}" \
-    "$DIR/Sources/OCRCore.swift" "$TMP/cli/main.swift" \
+    "$DIR/Sources/OCRCore.swift" "$DIR/Sources/TextCleanup.swift" "$TMP/cli/main.swift" \
     -o "$BUILD/ocr_cli"
 
 echo "Built: $APP"

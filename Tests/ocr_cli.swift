@@ -1,6 +1,7 @@
 // Command-line harness for OCRCore.
-// Usage: ocr_cli <image-path>
-// Prints the recognized text to stdout. Exits non-zero on error.
+// Usage: ocr_cli <image-path>      prints the recognized text
+//        ocr_cli --clean-up        reads text on stdin, prints it cleaned up
+// Exits non-zero on error.
 import Foundation
 
 func fail(_ message: String, code: Int32) -> Never {
@@ -9,6 +10,11 @@ func fail(_ message: String, code: Int32) -> Never {
 }
 
 let arguments = CommandLine.arguments
+if arguments.count == 2, arguments[1] == "--clean-up" {
+    let input = String(decoding: FileHandle.standardInput.readDataToEndOfFile(), as: UTF8.self)
+    print(TextCleanup.cleanUp(input).text, terminator: "")
+    exit(0)
+}
 guard arguments.count == 2 else {
     fail("usage: \(arguments.first ?? "ocr_cli") <image-path>", code: 2)
 }

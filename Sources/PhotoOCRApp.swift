@@ -33,6 +33,28 @@ final class OCRViewModel: ObservableObject {
     /// True while a drag hovers over the window. Kept here rather than in
     /// @State because @State needs a compiler plugin that ships only with Xcode.
     @Published var isDropTargeted = false
+    /// Short status shown after Clean Up or Fix with AI, for example
+    /// "Cleaned up 12 items".
+    @Published var cleanUpNote: String?
+    /// Progress text while Fix with AI runs; nil when it is not running.
+    @Published var aiProgress: String?
+    /// Whether this Mac has the on-device language model (macOS 26 or later
+    /// with Apple Intelligence turned on). Checked once at launch.
+    let aiAvailable = AITextFixer.isAvailable
+
+    /// The text as it was before the last Clean Up or Fix with AI, and the
+    /// text that step produced. Undo is offered only while the text box still
+    /// holds that result.
+    private var textBeforeCleanUp: String?
+    private var textAfterCleanUp: String?
+    private var aiTask: Task<Void, Never>?
+
+    var canUndoCleanUp: Bool {
+        textBeforeCleanUp != nil && text == textAfterCleanUp
+    }
+
+    /// True while recognition or Fix with AI is running.
+    var isBusy: Bool { isRecognizing || aiProgress != nil }
 
     private var pasteMonitor: Any?
 
@@ -60,6 +82,12 @@ final class OCRViewModel: ObservableObject {
         text = ""
         errorMessage = nil
         noTextFound = false
+        cleanUpNote = nil
+        textBeforeCleanUp = nil
+        textAfterCleanUp = nil
+        aiTask?.cancel()
+        aiTask = nil
+        aiProgress = nil
         isRecognizing = true
 
         Task.detached(priority: .userInitiated) { [weak self] in
@@ -198,6 +226,65 @@ final class OCRViewModel: ObservableObject {
         return UTType(filenameExtension: url.pathExtension)?.conforms(to: .image) ?? false
     }
 
+    // MARK: Clean up
+
+    /// Repairs misread words and removes stray marks; see `TextCleanup`.
+    func cleanUp() {
+        let result = TextCleanup.cleanUp(text)
+        guard result.changes > 0, result.text != text else {
+            cleanUpNote = "Nothing to clean up"
+            return
+        }
+        textBeforeCleanUp = text
+        textAfterCleanUp = result.text
+        text = result.text
+        cleanUpNote = result.changes == 1 ? "Cleaned up 1 item" : "Cleaned up \(result.changes) items"
+    }
+
+    /// Corrects the text with the on-device language model; see `AITextFixer`.
+    func fixWithAI() {
+        guard aiAvailable, aiProgress == nil, !text.isEmpty else { return }
+        let original = text
+        cleanUpNote = nil
+        aiProgress = "Fixing with AI…"
+        aiTask = Task { [weak self] in
+            let result = try? await AITextFixer.fix(original) { [weak self] done, total in
+                Task { @MainActor in self?.showAIProgress(done: done, total: total) }
+            }
+            guard let self, !Task.isCancelled else { return }
+            self.aiProgress = nil
+            self.aiTask = nil
+            // Do not overwrite text the user changed while the model ran.
+            guard let result, self.text == original else {
+                self.cleanUpNote = result == nil ? "AI fix failed" : "Text changed; AI fix not applied"
+                return
+            }
+            guard result.partsLeftUnchanged < result.parts, result.text != original else {
+                self.cleanUpNote = "AI made no changes"
+                return
+            }
+            self.textBeforeCleanUp = original
+            self.textAfterCleanUp = result.text
+            self.text = result.text
+            self.cleanUpNote = result.partsLeftUnchanged == 0
+                ? "Fixed with AI; check names and numbers"
+                : "Fixed with AI; \(result.partsLeftUnchanged) of \(result.parts) parts left unchanged"
+        }
+    }
+
+    private func showAIProgress(done: Int, total: Int) {
+        guard aiProgress != nil else { return }
+        aiProgress = "Fixing with AI… part \(done + 1) of \(total)"
+    }
+
+    func undoCleanUp() {
+        guard canUndoCleanUp, let before = textBeforeCleanUp else { return }
+        text = before
+        textBeforeCleanUp = nil
+        textAfterCleanUp = nil
+        cleanUpNote = nil
+    }
+
     // MARK: Copy and save
 
     func copyText() {
@@ -241,7 +328,7 @@ struct ContentView: View {
                     .textSelection(.enabled)
             }
         }
-        .frame(minWidth: 720, minHeight: 440)
+        .frame(minWidth: 860, minHeight: 440)
         .onDrop(of: [.fileURL, .image], isTargeted: $model.isDropTargeted) { providers in
             model.handleDrop(providers)
         }
@@ -296,12 +383,33 @@ struct ContentView: View {
                 } else if model.noTextFound && model.text.isEmpty {
                     Text("No text found")
                         .foregroundColor(.secondary)
+                } else if let progress = model.aiProgress {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text(progress)
+                        .foregroundColor(.secondary)
+                } else if let note = model.cleanUpNote {
+                    Text(note)
+                        .foregroundColor(.secondary)
                 }
                 Spacer()
+                if model.canUndoCleanUp {
+                    Button("Undo") { model.undoCleanUp() }
+                        .help("Put back the text as it was before Clean Up or Fix with AI")
+                } else {
+                    Button("Clean Up") { model.cleanUp() }
+                        .disabled(model.text.isEmpty || model.isBusy)
+                        .help("Repair misread words and remove stray marks at line ends (English)")
+                    if model.aiAvailable {
+                        Button("Fix with AI") { model.fixWithAI() }
+                            .disabled(model.text.isEmpty || model.isBusy)
+                            .help("Correct misread words with the language model built into macOS. Runs on this Mac; nothing is sent anywhere.")
+                    }
+                }
                 Button("Copy") { model.copyText() }
-                    .disabled(model.text.isEmpty)
+                    .disabled(model.text.isEmpty || model.aiProgress != nil)
                 Button("Save…") { model.saveWithPanel() }
-                    .disabled(model.text.isEmpty)
+                    .disabled(model.text.isEmpty || model.aiProgress != nil)
             }
             .padding(8)
             Divider()

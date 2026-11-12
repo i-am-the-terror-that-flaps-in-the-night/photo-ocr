@@ -27,4 +27,27 @@ else
     echo "PASS  not_image.txt (rejected)"
 fi
 
+# Clean-up: misread words are repaired, stray marks at line ends are removed,
+# and ambiguous or correct words are left alone.
+if "$CLI" --clean-up < "$FIX/cleanup_input.txt" | diff - "$FIX/cleanup_expected.txt" >/dev/null; then
+    echo "PASS  clean-up"
+else
+    echo "FAIL  clean-up"; failures=$((failures + 1))
+fi
+
+# Clean-up must leave correct text alone: each line of cleanup_keep.txt is
+# cleaned on its own and must come back unchanged.
+keep_failures=0
+while IFS= read -r line; do
+    out="$(printf '%s' "$line" | "$CLI" --clean-up)"
+    if [ "$out" != "$line" ]; then
+        echo "      changed: [$line] -> [$out]"; keep_failures=$((keep_failures + 1))
+    fi
+done < "$FIX/cleanup_keep.txt"
+if [ "$keep_failures" -eq 0 ]; then
+    echo "PASS  clean-up leaves correct text alone"
+else
+    echo "FAIL  clean-up changed $keep_failures correct line(s)"; failures=$((failures + 1))
+fi
+
 [ "$failures" -eq 0 ] && echo "All tests passed." || { echo "$failures test(s) failed."; exit 1; }
