@@ -242,25 +242,31 @@ final class OCRViewModel: ObservableObject {
     }
 
     /// Corrects the text with the on-device language model; see `AITextFixer`.
+    /// The text box is read-only while this runs and shows the corrected text
+    /// as the model writes it.
     func fixWithAI() {
         guard aiAvailable, aiProgress == nil, !text.isEmpty else { return }
         let original = text
+        // Parts with nothing misspelled are passed through without the model.
+        let parts = AITextFixer.split(original).map {
+            AITextFixer.Part(text: $0, needsFixing: TextCleanup.needsWork($0))
+        }
+        guard parts.contains(where: \.needsFixing) else {
+            cleanUpNote = "Nothing for AI to fix"
+            return
+        }
         cleanUpNote = nil
         aiProgress = "Fixing with AI…"
         aiTask = Task { [weak self] in
-            let result = try? await AITextFixer.fix(original) { [weak self] done, total in
-                Task { @MainActor in self?.showAIProgress(done: done, total: total) }
+            let result = try? await AITextFixer.fix(parts) { [weak self] partial, number, total in
+                Task { @MainActor in self?.showAIProgress(partial, part: number, of: total) }
             }
             guard let self, !Task.isCancelled else { return }
             self.aiProgress = nil
             self.aiTask = nil
-            // Do not overwrite text the user changed while the model ran.
-            guard let result, self.text == original else {
-                self.cleanUpNote = result == nil ? "AI fix failed" : "Text changed; AI fix not applied"
-                return
-            }
-            guard result.partsLeftUnchanged < result.parts, result.text != original else {
-                self.cleanUpNote = "AI made no changes"
+            guard let result, result.partsLeftUnchanged < result.partsSent, result.text != original else {
+                self.text = original
+                self.cleanUpNote = result == nil ? "AI fix failed" : "AI made no changes"
                 return
             }
             self.textBeforeCleanUp = original
@@ -268,13 +274,15 @@ final class OCRViewModel: ObservableObject {
             self.text = result.text
             self.cleanUpNote = result.partsLeftUnchanged == 0
                 ? "Fixed with AI; check names and numbers"
-                : "Fixed with AI; \(result.partsLeftUnchanged) of \(result.parts) parts left unchanged"
+                : "Fixed with AI; \(result.partsLeftUnchanged) of \(result.partsSent) parts left unchanged"
         }
     }
 
-    private func showAIProgress(done: Int, total: Int) {
-        guard aiProgress != nil else { return }
-        aiProgress = "Fixing with AI… part \(done + 1) of \(total)"
+    private func showAIProgress(_ partial: String, part: Int, of total: Int) {
+        // Ignore updates that arrive after the run finished or was cancelled.
+        guard aiProgress != nil, aiTask != nil else { return }
+        text = partial
+        aiProgress = "Fixing with AI… part \(part) of \(total)"
     }
 
     func undoCleanUp() {
@@ -414,6 +422,8 @@ struct ContentView: View {
             .padding(8)
             Divider()
             TextEditor(text: $model.text)
+                // Read-only while the AI writes into it.
+                .disabled(model.aiProgress != nil)
                 .font(.body)
                 .padding(4)
                 // The text view would otherwise take file and image drops itself.

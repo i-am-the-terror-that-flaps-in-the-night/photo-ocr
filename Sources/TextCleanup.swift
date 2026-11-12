@@ -58,6 +58,18 @@ enum TextCleanup {
         return Result(text: lines.map { $0.body + $0.ending }.joined(separator: "\n"), changes: changes)
     }
 
+    /// True if the text has a word the spell checker does not know, or a line
+    /// that ends in stray marks: something for Fix with AI to work on.
+    static func needsWork(_ text: String) -> Bool {
+        let checker = NSSpellChecker.shared
+        let misspelled = checker.checkSpelling(
+            of: text, startingAt: 0, language: primaryLanguage, wrap: false,
+            inSpellDocumentWithTag: 0, wordCount: nil
+        )
+        if misspelled.location != NSNotFound { return true }
+        return text.components(separatedBy: "\n").contains { removingStrayMarks(from: $0).removed > 0 }
+    }
+
     /// True unless the text is clearly in a language other than English.
     private static func isEnglish(_ text: String) -> Bool {
         let recognizer = NLLanguageRecognizer()
