@@ -20,6 +20,8 @@
 - **Copy** puts the text on the clipboard; **Save…** writes it to a `.txt` file.
 - Reads JPEG, PNG, HEIC (straight from an iPhone) and the other image formats macOS understands.
 - Photos stored sideways or upside down are handled: the app reads the photo's rotation tag.
+- Small text is enlarged and read a second time, which makes low-resolution photos much more accurate.
+- Lines made only of dots and symbols (borders, bullets) are left out.
 
 It is built for printed text: book pages, letters, receipts, signs, screenshots.
 
@@ -27,7 +29,7 @@ It is built for printed text: book pages, letters, receipts, signs, screenshots.
 
 - **No network access.** The app contains no networking code. Recognition is done by the Vision framework that ships with macOS.
 - **Nothing is stored.** No history, no analytics, no accounts. Your photos are read, shown and forgotten.
-- **You can check.** The whole app is two Swift files in [`Sources/`](Sources), about 450 lines.
+- **You can check.** The whole app is two Swift files in [`Sources/`](Sources), about 525 lines.
 
 ## Install
 
@@ -91,7 +93,7 @@ Other scripts:
 
 ## Known limits
 
-- **Handwriting** is hit and miss. The app is meant for printed text.
+- **Handwriting and handwriting-style fonts** are hit and miss. The app is meant for ordinary printed text.
 - **Layout is not preserved.** You get the lines of text in reading order, not tables or columns as such.
 - **Steep angles, blur and glare** reduce accuracy. A photo taken roughly square-on in good light works best.
 - **macOS versions:** the app targets macOS 13 and later, but it has only been run on macOS 27. Older versions are untested.
